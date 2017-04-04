@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>QuickCheck for Java</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+      
+      img.center {
+        display: block;
+        margin: 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# **QuickCheck for Java**
+
+---
+
+# property-based (or specification-based) testing
+
+* JCheck
+* Quickcheck
+* Functional Java
+* (ScalaCheck)
+* QuickTheories
+* junit-quickcheck
+
+---
+
+# JCheck
+
+* 0.1 (2008-08-18)
+* http://www.jcheck.org/
+* `org.jcheck` package
+* for JUnit 4.x
+
+```java
+public interface Gen<T> {
+    // Returns an arbitrary object of type T
+    public T arbitrary(Random random, long size);
+}
+
+// and org.jcheck.generator.primitive.*
+//  with ElementGen<T>, FrequencyGen<T>, NullGen<T>, OneOfGen<T>, and so on
+
+// logic in org.jcheck.internal.runners.statements.JCheckStatement
+
+public class Arbitrary { // it is an utility class
+    public static <T> Gen<T> getStandardGenerator(Class<T> forClass)
+    public static long random(Random random, long from, long to)
+}
+
+  @Test
+  public void testDivision(int i, int j) {
+    imply("Can't divide by zero", j != 0); // Implication ==>
+    assertEquals(i/j, someDivision(i, j));
+  }
+```
+
+---
+
+# Quickcheck
+
+* 0.6 (2011-03-19)
+* https://bitbucket.org/blob79/quickcheck
+* `net.java.quickcheck` package
+* Java 6
+* supports repeatable tests (deterministic generators)
+
+```java
+public interface Generator<T> {
+  public T next();
+}
+
+class NameGenerator implements net.java.quickcheck.Generator<Name> {
+  Generator<String> first = PrimitiveGenerators.strings();
+  Generator<String> last = PrimitiveGenerators.strings();
+
+  @Override public Name next() {
+    return new Name(first.next(), last.next());
+  }
+}
+
+// PrimitiveGenerators
+// CombinedGenerators: Collections, ensureValues(), nullsAnd(integers()), unique()
+```
+
+---
+
+# Quickcheck (continued)
+
+```java
+// code generation by quickcheck-src-generator.jar
+String sample  = strings().next();
+String sample  = anyString();
+
+for (Integer any : Iterables.toIterable(PrimitiveGenerators.integers())) {
+for (Integer any : someIntegers())
+
+// generator combination example
+double max = Math.sqrt(Double.MAX_VALUE);
+double firstInvalid = Math.nextUp(max);
+Generator<Double> invalidArguments =
+  oneOf(doubles(-Double.MAX_VALUE, -firstInvalid))
+  .add(doubles(firstInvalid, Double.MAX_VALUE));
+
+for (double a : someEnsureValues(asList(firstInvalid, -firstInvalid),
+                                 invalidArguments)) {
+```
+
+---
+
+# Quickcheck (three ways)
+
+```java
+@Test
+public void classic() {
+  forAll(PrimitiveGenerators.integers(), new AbstractCharacteristic<Integer>() {
+    @Override
+    protected void doSpecify(Integer any) throws Throwable {
+      assertEquals(any * 2, any + any);
+    }
+  });
+}
+
+@ForAll(generatorMethod = "...quickcheck.generator.PrimitiveGenerators.integers")
+public void annotation(Integer any) {
+  assertEquals(any * 2, any + any);
+}
+
+@Test
+public void iterable() {
+  for (Integer any : Iterables.toIterable(PrimitiveGenerators.integers())) {
+    assertEquals(any * 2, any + any);
+  }
+}
+```
+
+---
+
+# Functional Java
+
+* 4.7 (2017-03-27)
+* http://www.functionaljava.org/
+* `fj.test` package
+* supports shrinking and memoisation
+
+```java
+public final class Gen<A> {
+  // elements(), listOf(), oneOf(), combinationOf(), permutationOf(), ...
+}
+
+public final class Arbitrary {
+  static Gen<java.lang.Integer> arbInteger;
+  static Gen<java.lang.String> arbAlphaNumString;
+  static Gen<java.util.Date> arbDate;
+  // ...
+}
+
+public final class Property {
+  static <A> Property property(Gen<A> aa, fj.F<A,Property> f) { // ...
+  static <A,B> Property property(Gen<A> aa, Gen<B> ab,
+                                 fj.F<A,fj.F<B,Property>> f) { // ...
+  CheckResult check() { // ...
+  static Property implies(boolean b, fj.F0<Property> p) { // ...
+  // ...
+}
+```
+
+---
+
+# Functional Java (continued)
+
+```java
+final Property p = property(arbLinkedList(arbInteger), arbLinkedList(arbInteger),
+    new F2<LinkedList<Integer>, LinkedList<Integer>, Property>() {
+  public Property f(final LinkedList<Integer> x, final LinkedList<Integer> y) {
+    final LinkedList<Integer> xy = new LinkedList<Integer>(x);
+    xy.addAll(y);
+    return prop(xy.size() == x.size() + y.size());
+  }
+});
+summary.println(p.check());
+```
+
+```java
+// compose the generators
+static Gen<Person> personArbitrary() {
+  return arbInteger.bind(arbString(), arbBoolean(),
+      {int age => {String name => {boolean male => new Person(age, name, male)}}};
+}
+```
+
+---
+
+# ScalaCheck
+
+* 1.13.4 (2016-11-01)
+* http://www.scalacheck.org/
+* *ScalaCheck: The Definitive Guide*
+* some Functional Java tests use ScalaCheck
+
+---
+
+# QuickTheories
+
+* 0.13 (2016-06-07)
+* https://github.com/ncredinburgh/QuickTheories
+* `org.quicktheories.quicktheories` package
+* for Java 8
+* supports shrinking, repeatable tests and assumptions
+
+```java
+@Test
+public void addingTwoPositiveIntegersAlwaysGivesAPositiveInteger() {
+  qt()
+  .forAll(integers().allPositive()
+        , integers().allPositive())
+  .check((i,j) -> i + j > 0);
+}
+
+@Test
+public void someTheoryOrOther() {
+  qt()
+  .forAll(integers().allPositive()
+        , strings().basicLatinAlphabet().ofLengthBetween(0, 10)
+        , lists().allListsOf(integers().all()).ofSize(42))
+  .assuming((i,s,l) -> s.contains(i.toString()))
+  .check((i,s,l) -> l.contains(i) && s.contains(i.toString()));
+}
+```
+
+---
+
+# QuickTheories (continued)
+
+```java
+@Test
+public void someTheoryOrOther() {
+  qt()
+  .forAll(integers().allPositive()
+        , integers().allPositive())
+  .asWithPrecursor( (width,height) -> new Widget(width,height) )
+  .check( (width,height,widget) -> widget.size() > width * height );
+}
+
+private Generator<Cylinder> cylinders() {
+  return integers().from(0).upTo(10000)
+         .combine(integers().allPositive(),
+                  (radius,height) -> new Cylinder(radius,height));
+}
+```
+
+---
+
+# junit-quickcheck
+
+* 0.8-alpha-4 (2017-03-07)
+* http://pholser.github.io/junit-quickcheck/site/0.8-alpha-4/
+* `com.pholser.junit.quickcheck` package
+* for JUnit 4.x and 5.x
+* supports shrinking, repeatable tests, assumptions and generator auto-generation
+
+> junit-quickcheck began its life as a library that supplies
+> [JUnit theories][junit_theory] with random values with which to test the
+> validity of the theories.
+
+```java
+@RunWith(JUnitQuickcheck.class)
+public class SymmetricKeyCryptographyProperties {
+  @Property public void decryptReversesEncrypt(String plaintext, Key key) {
+
+  @Property public void hold(@InRange(min = "0", max = "9") int digit) {
+
+  // test all the cases
+  @Property public void hold(@ValuesOf boolean b, @ValuesOf Ternary t) {
+
+  // OGNL expression
+  @Property public void hold(@When(satisfies = "#_ >= 0 && #_ <= 9") int digit) {
+
+  // assumeThat(m, not(equalTo(n)));
+```
+
+[junit_theory]: https://github.com/junit-team/junit4/wiki/theories
+
+---
+
+# junit-quickcheck (continued)
+
+```java
+public abstract class Generator<T> implements Gen<T>, Shrink<T> {
+  // ...
+
+public interface Gen<T> {
+  T generate(SourceOfRandomness random, GenerationStatus status);
+  // pure(), oneOf(), frequency(), ...
+```
+
+```java
+@Property public void shouldHold(@From(Version5.class) UUID u) {
+// or use ServiceLoader configurations
+
+@Property public void rounding(@From(Ctor.class) DollarsAndCents d) {
+// = gen().constructir(DollarsAndCents.class, BigDecimal.class).generate(r, s);
+
+@Property public void incrementing(@From(Fields.class) Counter c) {
+// = gen().fieldsOf(Counter.class).generate(r, s);
+```
+
+    </textarea>
+    <script src="remark-0.14.0.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
